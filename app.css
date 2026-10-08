@@ -126,6 +126,34 @@ input:focus, textarea:focus, select:focus { border-color: var(--ink); box-shadow
   color: #bdbdbd; font-size: 15px; pointer-events: none; padding: 0 16px; text-align: center;
 }
 .pad-tools { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--ink-3); }
+.pad-wrap.big canvas { height: min(52vh, 280px); }
+
+/* 서명란 (누르면 서명 창) */
+.sig-field {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 120px; padding: 10px;
+  border: 1.5px dashed var(--line-2); border-radius: 12px; background: #fcfcfc; cursor: pointer;
+  font: inherit; font-size: 15px; color: var(--ink-3); transition: border-color .15s, background .15s;
+}
+.sig-field:hover { border-color: var(--ink); background: #fff; }
+.sig-field.done { border-style: solid; background: #fff; }
+.sig-field img { display: block; max-width: 100%; max-height: 96px; }
+.sig-modal { max-width: 640px; }
+.sig-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.sig-head h2 { margin: 0; }
+.sig-head .linkish { font-size: 14px; }
+
+/* 문서 위 서명 자리 */
+.sign-tag {
+  position: absolute; padding: 0; margin: 0; cursor: pointer; border-radius: 5px;
+  border: 2px dashed var(--danger); background: rgba(179, 38, 30, 0.07);
+}
+.sign-tag::after {
+  content: "여기에 서명"; position: absolute; left: 50%; top: calc(100% + 5px); transform: translateX(-50%);
+  font: 700 12px/1 var(--font); color: #fff; background: var(--danger); padding: 7px 10px; border-radius: 5px; white-space: nowrap;
+}
+.sign-tag.done { border-color: transparent; background: transparent; }
+.sign-tag.done::after { display: none; }
+.doc-ink { position: absolute; pointer-events: none; }
 
 .check {
   display: flex; gap: 10px; align-items: flex-start; padding: 14px; border-radius: 10px;

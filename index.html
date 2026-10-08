@@ -107,14 +107,13 @@
 
       <div class="field">
         <label>서명</label>
-        <div class="pad-wrap">
-          <canvas id="pad"></canvas>
-          <div class="pad-guide"></div>
-          <div class="pad-placeholder" id="padPh">이 영역에 손가락이나 마우스로 서명해 주세요</div>
-        </div>
+        <button class="sig-field" id="sigField" type="button">
+          <span id="sigEmpty">여기를 눌러 서명해 주세요</span>
+          <img id="sigImg" alt="입력한 서명" hidden>
+        </button>
         <div class="pad-tools">
-          <span>정자로 또렷하게 서명해 주세요.</span>
-          <button class="linkish" id="btnClear" type="button">다시 쓰기</button>
+          <span id="sigState">누르면 서명 창이 열립니다.</span>
+          <button class="linkish" id="btnResign" type="button" hidden>다시 서명</button>
         </div>
       </div>
 
@@ -129,6 +128,26 @@
 
   </div>
 </main>
+
+<!-- 서명 창 -->
+<div class="modal-back" id="sigModal" hidden>
+  <div class="modal sig-modal" role="dialog" aria-modal="true" aria-labelledby="sigTitle">
+    <div class="sig-head">
+      <h2 id="sigTitle">서명</h2>
+      <button class="linkish" id="btnSigClose" type="button">닫기</button>
+    </div>
+    <p class="sub">아래 칸 안에 손가락이나 마우스로 서명해 주세요.</p>
+    <div class="pad-wrap big">
+      <canvas id="pad"></canvas>
+      <div class="pad-guide"></div>
+      <div class="pad-placeholder" id="padPh">이 안에 서명해 주세요</div>
+    </div>
+    <div class="btn-row modal-actions">
+      <button class="btn ghost" id="btnClear" type="button">지우기</button>
+      <button class="btn primary" id="btnSigDone" type="button">완료</button>
+    </div>
+  </div>
+</div>
 
 <!-- 서명 확인 -->
 <div class="modal-back" id="modal" hidden>
@@ -164,6 +183,8 @@
   var pending = null;      // 마무리 재시도용 데이터
   var draft = null;        // 제출 전 확인용 { name, sigBytes }
   var pad = null;
+  var sig = null;          // 입력한 서명 { bytes, url, w, h }
+  var inkSeq = 0;
 
   /* ---------------- 화면 전환 ---------------- */
   function show(id) {
@@ -236,6 +257,7 @@
     setup();
 
     return {
+      refresh: function () { cssW = 0; setup(); },
       clear: function () { ctx.clearRect(0, 0, canvas.width, canvas.height); strokes = 0; placeholder.hidden = false; },
       isEmpty: function () { return strokes < 6; },
       /** 여백을 잘라낸 PNG (투명 배경) */
@@ -504,6 +526,107 @@
     $('#pageCount').textContent = '총 ' + r.pages.length + '쪽';
   }
 
+  /* ---------------- 서명 창 ---------------- */
+  function openSign() {
+    if (!doc || $('#viewSign').hidden) return;
+    $('#sigModal').hidden = false;
+    document.body.classList.add('no-scroll');
+    if (!pad) pad = SignaturePad($('#pad'), $('#padPh'));
+    else pad.refresh();
+    pad.clear();
+  }
+
+  function closeSign() {
+    $('#sigModal').hidden = true;
+    document.body.classList.remove('no-scroll');
+  }
+
+  function finishSign() {
+    if (!pad || pad.isEmpty()) { UO.toast('칸 안에 서명해 주세요.'); return; }
+    pad.toPngBytes().then(function (bytes) {
+      if (!bytes) { UO.toast('칸 안에 서명해 주세요.'); return; }
+      var url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+      return UO.loadImage(url).then(function (img) {
+        if (sig && sig.url) URL.revokeObjectURL(sig.url);
+        sig = { bytes: bytes, url: url, w: img.naturalWidth, h: img.naturalHeight };
+        $('#sigImg').src = url;
+        $('#sigImg').hidden = false;
+        $('#sigEmpty').hidden = true;
+        $('#sigField').classList.add('done');
+        $('#sigState').textContent = '서명이 입력되었습니다.';
+        $('#btnResign').hidden = false;
+        $('#formError').textContent = '';
+        closeSign();
+        updateInk();
+      });
+    }).catch(function (e) { UO.toast(e.message); });
+  }
+
+  /** 문서 위 PDF 좌표 상자 → 페이지 기준 % 위치 */
+  function placeOnPage(pi, el, box) {
+    var r = pi.cssViewport.convertToViewportRectangle([box.x, box.y, box.x + box.w, box.y + box.h]);
+    var VW = pi.cssViewport.width, VH = pi.cssViewport.height;
+    el.style.left = (Math.min(r[0], r[2]) / VW * 100) + '%';
+    el.style.top = (Math.min(r[1], r[3]) / VH * 100) + '%';
+    el.style.width = (Math.abs(r[2] - r[0]) / VW * 100) + '%';
+    el.style.height = (Math.abs(r[3] - r[1]) / VH * 100) + '%';
+  }
+
+  function spotPage() {
+    if (!render || !doc) return null;
+    return render.pages[Math.min(doc.sigBox.page, render.pages.length - 1)] || null;
+  }
+
+  /** 문서의 서명 자리에 '여기에 서명' 표시 — 누르면 서명 창이 열림 */
+  function placeSignTag() {
+    var pi = spotPage();
+    if (!pi) return;
+    var spot = doc.sigBox;
+    var old = pi.wrap.querySelector('.sign-tag');
+    if (old) old.remove();
+    var r = UO.layout(spot, 300, 100, null).sig;
+    var x1 = Math.min(r.x, spot.x), y1 = Math.min(r.y, spot.y);
+    var x2 = Math.max(r.x + r.w, spot.x + spot.w), y2 = Math.max(r.y + r.h, spot.y + spot.h);
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'sign-tag';
+    el.setAttribute('aria-label', '여기를 눌러 서명');
+    placeOnPage(pi, el, { x: x1 - 3, y: y1 - 3, w: x2 - x1 + 6, h: y2 - y1 + 6 });
+    el.addEventListener('click', openSign);
+    pi.wrap.appendChild(el);
+    if (sig || cleanName()) updateInk();
+  }
+
+  function cleanName() { return $('#inName').value.replace(/\s+/g, ' ').trim(); }
+
+  /** 입력한 성명·서명을 문서 위에 미리 보여줌 (완료본과 같은 위치 계산) */
+  function updateInk() {
+    var pi = spotPage();
+    if (!pi || $('#viewSign').hidden) return;
+    var spot = doc.sigBox;
+    var name = cleanName();
+    var seq = ++inkSeq;
+    var job = spot.name && name ? UO.loadFonts(name, [400]).then(function () { return UO.textImage(name, spot.name.size); }) : Promise.resolve(null);
+    job.then(function (nameImg) {
+      if (seq !== inkSeq) return;
+      Array.prototype.forEach.call(pi.wrap.querySelectorAll('.doc-ink'), function (e) { e.remove(); });
+      var lay = UO.layout(spot, sig ? sig.w : 300, sig ? sig.h : 100, nameImg);
+      if (lay.name && nameImg) addInk(pi, nameImg.canvas.toDataURL('image/png'), lay.name);
+      if (sig) addInk(pi, sig.url, lay.sig);
+      var tag = pi.wrap.querySelector('.sign-tag');
+      if (tag) tag.classList.toggle('done', !!sig);
+    });
+  }
+
+  function addInk(pi, src, box) {
+    var img = document.createElement('img');
+    img.className = 'doc-ink';
+    img.alt = '';
+    img.src = src;
+    placeOnPage(pi, img, box);
+    pi.wrap.appendChild(img);
+  }
+
   /* ---------------- 제출 ---------------- */
   function norm(s) { return String(s || '').replace(/\s+/g, ''); }
 
@@ -513,24 +636,18 @@
     var name = $('#inName').value.replace(/\s+/g, ' ').trim();
     if (norm(name).length < 2) { err.textContent = '성명을 입력해 주세요.'; $('#inName').focus(); return; }
     if (doc.signerName && norm(name) !== norm(doc.signerName)) { err.textContent = '문서에 기재된 서명자(' + doc.signerName + ') 본인의 성명을 입력해 주세요.'; return; }
-    if (pad.isEmpty()) { err.textContent = '서명 영역에 서명해 주세요.'; return; }
+    if (!sig) { err.textContent = '서명란을 눌러 서명해 주세요.'; openSign(); return; }
     if (!$('#inAgree').checked) { err.textContent = '내용 확인 및 동의에 체크해 주세요.'; return; }
 
     var spot = doc.sigBox;
-    var sigBytes = null, sigUrl = null, nameImg = null;
+    var nameImg = null;
     UO.busy('확인 화면을 준비하고 있습니다');
-    pad.toPngBytes()
-      .then(function (bytes) {
-        if (!bytes) throw new Error('서명 영역에 서명해 주세요.');
-        sigBytes = bytes;
-        sigUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
-        return Promise.all([UO.loadImage(sigUrl), UO.loadFonts(name, [400])]);
-      })
+    Promise.all([UO.loadImage(sig.url), UO.loadFonts(name, [400])])
       .then(function (res) {
         var img = res[0];
         nameImg = spot.name ? UO.textImage(name, spot.name.size) : null;
         var lay = UO.layout(spot, img.naturalWidth, img.naturalHeight, nameImg);
-        draft = { name: name, sigBytes: sigBytes };
+        draft = { name: name, sigBytes: sig.bytes };
         $('#modalSub').textContent = spot.name
           ? '입력하신 성명과 서명이 아래와 같이 ' + info.label + '에 들어갑니다.'
           : '서명이 아래와 같이 ' + info.label + '에 들어갑니다.';
@@ -539,7 +656,7 @@
         var pageObj = render.pages[Math.min(spot.page, render.pages.length - 1)].page;
         return UO.renderSignPreview($('#previewCanvas'), pageObj, spot, lay, img, nameImg);
       })
-      .then(function () { UO.busy(null); if (sigUrl) URL.revokeObjectURL(sigUrl); })
+      .then(function () { UO.busy(null); })
       .catch(function (e) { UO.busy(null); closeModal(); err.textContent = e.message; });
   }
 
@@ -628,7 +745,7 @@
             }
             $('#viewSign').hidden = false;
             $('#btnGoSign').hidden = false;
-            pad = SignaturePad($('#pad'), $('#padPh'));
+            placeSignTag();
           });
         });
       })
@@ -643,17 +760,24 @@
     $('#viewSign').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   $('#btnClear').addEventListener('click', function () { if (pad) pad.clear(); });
+  $('#sigField').addEventListener('click', openSign);
+  $('#btnResign').addEventListener('click', openSign);
+  $('#btnSigDone').addEventListener('click', finishSign);
+  $('#btnSigClose').addEventListener('click', closeSign);
+  var nameTimer = null;
+  $('#inName').addEventListener('input', function () {
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(updateInk, 250);
+  });
   ['input', 'change'].forEach(function (ev) {
     $('#inName').addEventListener(ev, function () { $('#formError').textContent = ''; });
     $('#inAgree').addEventListener(ev, function () { $('#formError').textContent = ''; });
   });
-  $('#pad').addEventListener('pointerdown', function () { $('#formError').textContent = ''; });
   $('#btnSubmit').addEventListener('click', openPreview);
   $('#btnRedo').addEventListener('click', function () {
     closeModal();
     draft = null;
-    if (pad) pad.clear();
-    $('#pad').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    openSign();
   });
   $('#btnConfirm').addEventListener('click', submit);
   $('#modal').addEventListener('click', function (e) { if (e.target === $('#modal')) closeModal(); });
