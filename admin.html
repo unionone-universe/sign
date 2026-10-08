@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#ffffff">
+<meta name="format-detection" content="telephone=no">
 <title>전자서명 관리 · UNION ONE</title>
-<link rel="icon" type="image/png" href="logo.png">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -45,24 +47,28 @@
     <section class="card">
       <p class="eyebrow">NEW REQUEST</p>
       <h2>새 서명 요청</h2>
-      <p class="sub">계약서 PDF를 올리면 “(서명 또는 인)” 위치를 자동으로 찾아 서명 자리로 지정합니다.</p>
+      <p class="sub">견적서·계약서 PDF를 올리면 고객 서명 자리를 자동으로 찾습니다. 원본 내용은 그대로 유지됩니다.</p>
 
       <label class="drop" id="drop">
         <input type="file" id="inFile" accept="application/pdf,.pdf">
-        <strong id="dropTitle">계약서 PDF 선택</strong>
-        <span id="dropSub">눌러서 파일을 고르세요</span>
+        <strong id="dropTitle">PDF 파일 선택</strong>
+        <span id="dropSub">눌러서 파일을 고르거나 여기로 끌어다 놓으세요</span>
       </label>
 
       <div id="newForm" hidden style="margin-top:18px">
-        <div class="grid-2">
+        <div class="grid-2 grid-title">
           <div class="field">
             <label for="inTitle">문서명</label>
             <input type="text" id="inTitle" maxlength="80">
+            <div class="hint">고객 화면과 카카오톡 안내 문구에 표시됩니다.</div>
           </div>
           <div class="field">
-            <label for="inSigner">서명자 성명</label>
-            <input type="text" id="inSigner" maxlength="40" placeholder="예) 김주혜">
-            <div class="hint">서명 화면에서 이 이름과 똑같이 입력해야 서명할 수 있습니다.</div>
+            <label for="inType">문서 종류</label>
+            <select id="inType">
+              <option value="견적서">견적서</option>
+              <option value="계약서">계약서</option>
+              <option value="문서">기타 문서</option>
+            </select>
           </div>
         </div>
 
@@ -74,7 +80,7 @@
         <div class="viewer-head"><strong>미리보기</strong><span id="pageCount"></span></div>
         <div class="pdf-viewer" id="viewer"></div>
 
-        <div style="margin-top:18px">
+        <div class="sticky-action">
           <button class="btn primary block" id="btnCreate" type="button">서명 링크 만들기</button>
           <p class="error-text" id="createError"></p>
         </div>
@@ -83,21 +89,19 @@
       <div class="result-box" id="resultBox" hidden>
         <p class="eyebrow">LINK CREATED</p>
         <h2 id="resultTitle"></h2>
-        <div class="field" style="margin-top:12px">
-          <label>서명 링크</label>
-          <div class="copy-line">
-            <input type="text" id="outLink" readonly>
-            <button class="btn sm primary" id="btnCopyLink" type="button">복사</button>
-          </div>
+        <p class="sub" id="resultSub" style="margin-bottom:12px"></p>
+        <div class="btn-row">
+          <button class="btn primary" id="btnSend" type="button">카카오톡으로 보내기</button>
+          <button class="btn ghost" id="btnCopyLink" type="button">링크만 복사</button>
         </div>
-        <div class="field">
-          <label>카카오톡 안내 문구</label>
-          <textarea id="outMsg" readonly style="min-height:150px"></textarea>
-          <div class="btn-row" style="margin-top:8px">
-            <button class="btn sm primary" id="btnCopyMsg" type="button">문구 복사</button>
-            <a class="btn sm ghost" id="btnOpenLink" target="_blank" rel="noopener">서명 화면 열어보기</a>
-            <button class="btn sm ghost" id="btnNew" type="button">새로 만들기</button>
-          </div>
+        <p class="hint" id="sendHint" style="margin:8px 0 0"></p>
+        <div class="field" style="margin-top:16px">
+          <label for="outMsg">안내 문구</label>
+          <textarea id="outMsg" readonly style="min-height:214px"></textarea>
+        </div>
+        <div class="btn-row">
+          <a class="btn sm ghost" id="btnOpenLink" target="_blank" rel="noopener">고객 화면 열어보기</a>
+          <button class="btn sm ghost" id="btnNew" type="button">새로 만들기</button>
         </div>
       </div>
     </section>
@@ -130,8 +134,10 @@
   var pw = '';
   var file = null;       // { bytes, name }
   var render = null;     // renderPdf 결과
-  var sigBox = null;
+  var spot = null;       // 서명 자리
+  var spotHow = '';
   var picking = false;
+  var lastCreated = null;
 
   function store(v) {
     try { if (v) sessionStorage.setItem(KEY, v); else sessionStorage.removeItem(KEY); } catch (e) {}
@@ -142,10 +148,24 @@
 
   function signBase() { return new URL('./', location.href).href; }
   function linkOf(token) { return signBase() + '?t=' + token; }
-  function messageOf(title, signer, link) {
-    return '[UNION ONE] ' + signer + ' 님, 안녕하세요. (주)유니온 원입니다.\n' +
-      '「' + title + '」 전자서명을 요청드립니다.\n' +
-      '아래 링크에서 계약서 내용을 확인하신 뒤 서명 부탁드립니다.\n\n' + link;
+  function messageOf(d) {
+    var label = UO.docInfo(d.docType).label;
+    return '안녕하세요, (주)유니온 원입니다.\n' +
+      label + ' 보내드립니다.\n' +
+      '아래 링크에서 내용 확인하신 후 서명 부탁드립니다.\n\n' +
+      d.title + '\n' + linkOf(d.token) + '\n\n' +
+      '서명 기한: ' + UO.koDate(d.expiresAt) + '까지';
+  }
+  function send(d) { return UO.share(messageOf(d)); }
+
+  function setSendButtons() {
+    if (UO.canShare()) {
+      $('#btnSend').textContent = '카카오톡으로 보내기';
+      $('#sendHint').textContent = '공유 창에서 카카오톡을 고르고 받는 분을 선택하세요.';
+    } else {
+      $('#btnSend').textContent = '안내 문구 복사';
+      $('#sendHint').textContent = '복사한 뒤 카카오톡 대화창에 붙여넣기(Ctrl+V) 하세요.';
+    }
   }
 
   /* ---------------- 로그인 ---------------- */
@@ -169,30 +189,42 @@
   }
 
   /* ---------------- 파일 선택 ---------------- */
+  function titleFromFile(name, type) {
+    var t = name.replace(/\.pdf$/i, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    t = t.replace(/^유니온\s?원\s*/, '');
+    t = t.replace(/\s*\(?\d{4}[-.]\d{1,2}[-.]\d{1,2}\)?$/, '');
+    if (type !== '문서' && t.indexOf(type + ' ') === 0) t = t.slice(type.length + 1) + ' ' + type;
+    return t.trim().slice(0, 80);
+  }
+
   function onFile(f) {
     if (!f) return;
     if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { UO.toast('PDF 파일만 올릴 수 있습니다.'); return; }
-    UO.busy('계약서를 읽고 있습니다');
+    UO.busy('문서를 읽고 있습니다');
+    stopPick();
     f.arrayBuffer().then(function (buf) {
       file = { bytes: new Uint8Array(buf), name: f.name };
       $('#dropTitle').textContent = f.name;
       $('#dropSub').textContent = '다른 파일을 고르려면 다시 누르세요';
-      $('#inTitle').value = f.name.replace(/\.pdf$/i, '').replace(/[_]+/g, ' ').trim();
       $('#newForm').hidden = false;
       $('#resultBox').hidden = true;
+      $('#createError').textContent = '';
       return UO.renderPdf($('#viewer'), file.bytes);
     }).then(function (res) {
       render = res;
       $('#pageCount').textContent = '총 ' + res.pages.length + '쪽';
       bindPick();
-      return UO.findMarker(res.pdf, ['(서명 또는 인)', '(서명)', '(인)']);
-    }).then(function (box) {
+      return UO.findSignSpot(res.pdf);
+    }).then(function (found) {
       UO.busy(null);
-      if (box) {
-        setBox(box, '자동으로 찾은 위치');
+      $('#inType').value = found.docType;
+      $('#inTitle').value = titleFromFile(file.name, found.docType);
+      if (found.spot) {
+        setSpot(found.spot, found.how || '자동');
       } else {
-        sigBox = null;
-        $('#markInfo').textContent = '서명 위치 표시 문구를 찾지 못했습니다. “서명 위치 직접 지정”을 누른 뒤 미리보기에서 서명할 곳을 눌러 주세요.';
+        spot = null;
+        UO.clearMarks(render);
+        $('#markInfo').textContent = '서명 자리를 찾지 못했습니다. “서명 위치 직접 지정”을 누른 뒤 미리보기에서 서명할 곳을 눌러 주세요.';
       }
     }).catch(function (e) {
       UO.busy(null);
@@ -200,13 +232,16 @@
     });
   }
 
-  function setBox(box, how) {
-    sigBox = box;
-    var pi = render.pages[box.page];
-    render.pages.forEach(function (p) { var m = p.wrap.querySelector('.sig-mark'); if (m) m.remove(); });
-    var el = UO.drawMark(pi, box);
-    $('#markInfo').textContent = '서명 위치: ' + (box.page + 1) + '쪽 (' + how + '). 위치가 다르면 “서명 위치 직접 지정”으로 바꿀 수 있습니다.';
-    if (how !== '자동으로 찾은 위치') el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  function setSpot(s, how) {
+    spot = s;
+    spotHow = how;
+    var el = UO.showSpot(render, s);
+    var type = UO.docInfo($('#inType').value).label;
+    var where = (s.page + 1) + '쪽 ' + (how === '직접 지정' ? '직접 지정한 위치' : how);
+    $('#markInfo').textContent = s.name
+      ? type + '로 인식했습니다. ' + where + '에 고객 서명이 들어가고, 고객이 입력한 성명이 성명란에 기재됩니다. 위치가 다르면 “서명 위치 직접 지정”으로 바꿀 수 있습니다.'
+      : type + '로 인식했습니다. ' + where + '에 고객 서명이 들어갑니다. 위치가 다르면 “서명 위치 직접 지정”으로 바꿀 수 있습니다.';
+    if (how === '직접 지정' && el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   function bindPick() {
@@ -217,13 +252,17 @@
         var sx = (e.clientX - r.left) / r.width * p.cssViewport.width;
         var sy = (e.clientY - r.top) / r.height * p.cssViewport.height;
         var pt = p.cssViewport.convertToPdfPoint(sx, sy);
-        var w = 70, h = 16;
-        setBox({ page: p.index, x: pt[0] - w / 2, y: pt[1] - h / 2, w: w, h: h }, '직접 지정');
-        picking = false;
-        $('#viewer').classList.remove('pick-mode');
-        $('#btnPick').textContent = '서명 위치 직접 지정';
+        var w = 60, h = 16;
+        setSpot({ page: p.index, x: pt[0] - w / 2, y: pt[1] - h / 2, w: w, h: h, kind: 'manual', name: null }, '직접 지정');
+        stopPick();
       });
     });
+  }
+
+  function stopPick() {
+    picking = false;
+    $('#viewer').classList.remove('pick-mode');
+    $('#btnPick').textContent = '서명 위치 직접 지정';
   }
 
   /* ---------------- 만들기 ---------------- */
@@ -231,28 +270,28 @@
     var err = $('#createError');
     err.textContent = '';
     var title = $('#inTitle').value.trim();
-    var signer = $('#inSigner').value.trim();
-    if (!file) { err.textContent = '계약서 PDF를 선택해 주세요.'; return; }
+    var docType = $('#inType').value;
+    if (!file) { err.textContent = 'PDF 파일을 선택해 주세요.'; return; }
     if (!title) { err.textContent = '문서명을 입력해 주세요.'; return; }
-    if (!signer) { err.textContent = '서명자 성명을 입력해 주세요.'; return; }
-    if (!sigBox) { err.textContent = '서명 위치를 지정해 주세요.'; return; }
+    if (!spot) { err.textContent = '서명 위치를 지정해 주세요.'; return; }
+
+    var box = { page: spot.page, x: round(spot.x), y: round(spot.y), w: round(spot.w), h: round(spot.h), kind: spot.kind, name: null };
+    if (spot.name) box.name = { x1: round(spot.name.x1), x2: round(spot.name.x2), y: round(spot.name.y), size: round(spot.name.size) };
 
     $('#btnCreate').disabled = true;
     UO.busy('서명 링크를 만들고 있습니다');
     UO.bytesToB64(file.bytes)
       .then(function (b64) {
-        return UO.api('admin.create', {
-          pw: pw, title: title, signerName: signer, fileName: file.name, pdf: b64,
-          sigBox: { page: sigBox.page, x: round(sigBox.x), y: round(sigBox.y), w: round(sigBox.w), h: round(sigBox.h) },
-        });
+        return UO.api('admin.create', { pw: pw, title: title, docType: docType, fileName: file.name, pdf: b64, sigBox: box });
       })
       .then(function (r) {
         UO.busy(null);
-        var link = linkOf(r.token);
-        $('#resultTitle').textContent = r.docNo + ' · ' + title;
-        $('#outLink').value = link;
-        $('#outMsg').value = messageOf(title, signer, link);
-        $('#btnOpenLink').href = link;
+        lastCreated = { token: r.token, title: title, docType: docType, expiresAt: r.expiresAt, docNo: r.docNo };
+        $('#resultTitle').textContent = title;
+        $('#resultSub').textContent = r.docNo + ' · ' + UO.docInfo(docType).label + ' · 서명 기한 ' + UO.koDate(r.expiresAt) + '까지';
+        $('#outMsg').value = messageOf(lastCreated);
+        $('#btnOpenLink').href = linkOf(r.token);
+        setSendButtons();
         $('#newForm').hidden = true;
         $('#resultBox').hidden = false;
         $('#resultBox').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -264,21 +303,32 @@
   function round(n) { return Math.round(n * 100) / 100; }
 
   function resetNew() {
-    file = null; render = null; sigBox = null;
+    file = null; render = null; spot = null; lastCreated = null;
+    stopPick();
     $('#inFile').value = '';
-    $('#dropTitle').textContent = '계약서 PDF 선택';
-    $('#dropSub').textContent = '눌러서 파일을 고르세요';
+    $('#dropTitle').textContent = 'PDF 파일 선택';
+    $('#dropSub').textContent = DROP_SUB;
     $('#inTitle').value = '';
-    $('#inSigner').value = '';
     $('#viewer').innerHTML = '';
     $('#newForm').hidden = true;
     $('#resultBox').hidden = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   /* ---------------- 목록 ---------------- */
   function badge(status) {
-    var cls = status === '완료' ? 'badge solid' : status === '취소' ? 'badge muted' : 'badge';
+    var cls = status === '완료' ? 'badge solid' : (status === '취소' || status === '만료') ? 'badge muted' : 'badge';
     return '<span class="' + cls + '">' + UO.esc(status) + '</span>';
+  }
+
+  function subLine(d) {
+    var parts = [d.docNo, UO.docInfo(d.docType).label];
+    if (d.status === '완료') parts.push('서명 ' + d.signedAt.slice(0, 16) + ' · ' + d.signerName);
+    else if (d.status === '처리중') parts.push('서명 접수 ' + d.signedAt.slice(0, 16) + ' · ' + d.signerName);
+    else if (d.status === '대기') parts.push('요청 ' + d.createdAt.slice(0, 10) + ' · 기한 ' + d.expiresAt.slice(0, 10));
+    else if (d.status === '만료') parts.push('기한 지남 ' + d.expiresAt.slice(0, 10));
+    else parts.push('요청 ' + d.createdAt.slice(0, 10));
+    return parts.join(' · ');
   }
 
   function loadList() {
@@ -290,20 +340,26 @@
       r.rows.forEach(function (d) {
         var li = document.createElement('li');
         li.className = 'doc-item';
-        var when = d.status === '완료' ? '서명 ' + d.signedAt : '요청 ' + d.createdAt;
         li.innerHTML =
           '<div><div class="doc-title">' + UO.esc(d.title) + '</div>' +
-          '<div class="doc-sub">' + UO.esc(d.docNo) + ' · 서명자 ' + UO.esc(d.signerName) + ' · ' + UO.esc(when) + '</div></div>' +
+          '<div class="doc-sub">' + UO.esc(subLine(d)) + '</div></div>' +
           '<div>' + badge(d.status) + '</div>' +
           '<div class="doc-actions"></div>';
         var act = li.querySelector('.doc-actions');
-        if (d.status === '대기' || d.status === '처리중') {
-          act.appendChild(btn('링크 복사', 'primary', function () { UO.copyText(linkOf(d.token)); }));
-          act.appendChild(btn('안내 문구 복사', 'ghost', function () { UO.copyText(messageOf(d.title, d.signerName, linkOf(d.token))); }));
-        }
-        if (d.signedUrl) act.appendChild(link('완료본 열기', d.signedUrl));
-        if (d.folderUrl) act.appendChild(link('보관 폴더', d.folderUrl));
         if (d.status === '대기') {
+          act.appendChild(btn(UO.canShare() ? '카톡 보내기' : '안내 문구 복사', 'primary', function () { send(d); }));
+          act.appendChild(btn('링크 복사', 'ghost', function () { UO.copyText(linkOf(d.token)); }));
+          act.appendChild(btn('기한 연장', 'ghost', function () { extend(d); }));
+        }
+        if (d.status === '처리중') {
+          act.appendChild(btn('링크 복사', 'ghost', function () { UO.copyText(linkOf(d.token)); }));
+        }
+        if (d.status === '만료') {
+          act.appendChild(btn('기한 연장', 'primary', function () { extend(d); }));
+        }
+        if (d.signedUrl) act.appendChild(link('완료본 열기', d.signedUrl, 'primary'));
+        if (d.folderUrl) act.appendChild(link('보관 폴더', d.folderUrl, 'ghost'));
+        if (d.status === '대기' || d.status === '만료') {
           act.appendChild(btn('요청 취소', 'danger', function () { cancel(d); }));
         }
         ul.appendChild(li);
@@ -323,9 +379,9 @@
     b.addEventListener('click', fn);
     return b;
   }
-  function link(text, href) {
+  function link(text, href, kind) {
     var a = document.createElement('a');
-    a.className = 'btn sm ghost';
+    a.className = 'btn sm ' + (kind || 'ghost');
     a.textContent = text;
     a.href = href;
     a.target = '_blank';
@@ -333,13 +389,27 @@
     return a;
   }
 
+  function confirmBox(msg) {
+    try { return window.confirm(msg); } catch (e) { return true; }
+  }
+
   function cancel(d) {
-    var ok = true;
-    try { ok = window.confirm('「' + d.title + '」 서명 요청을 취소할까요? 취소하면 링크로 서명할 수 없습니다.'); } catch (e) {}
-    if (!ok) return;
+    if (!confirmBox('「' + d.title + '」 서명 요청을 취소할까요? 취소하면 링크로 서명할 수 없습니다.')) return;
     UO.busy('취소하고 있습니다');
     UO.api('admin.cancel', { pw: pw, docNo: d.docNo })
       .then(function () { UO.busy(null); UO.toast('취소했습니다.'); loadList(); })
+      .catch(function (e) { UO.busy(null); UO.toast(e.message); });
+  }
+
+  function extend(d) {
+    UO.busy('기한을 연장하고 있습니다');
+    UO.api('admin.extend', { pw: pw, docNo: d.docNo })
+      .then(function (r) {
+        UO.busy(null);
+        d.expiresAt = r.expiresAt;
+        UO.toast('서명 기한을 ' + UO.koDate(r.expiresAt) + '까지 연장했습니다.');
+        loadList();
+      })
       .catch(function (e) { UO.busy(null); UO.toast(e.message); });
   }
 
@@ -357,6 +427,18 @@
   $('#inPw').addEventListener('keydown', function (e) { if (e.key === 'Enter') login($('#inPw').value); });
   $('#btnLogout').addEventListener('click', logout);
   $('#inFile').addEventListener('change', function (e) { onFile(e.target.files[0]); });
+  var drop = $('#drop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) onFile(f);
+  });
+  $('#inType').addEventListener('change', function () { if (spot) setSpot(spot, spotHow); });
   $('#btnPick').addEventListener('click', function () {
     if (!render) return;
     picking = !picking;
@@ -365,10 +447,14 @@
     if (picking) UO.toast('미리보기에서 서명할 곳을 눌러 주세요.');
   });
   $('#btnCreate').addEventListener('click', create);
-  $('#btnCopyLink').addEventListener('click', function () { UO.copyText($('#outLink').value); });
-  $('#btnCopyMsg').addEventListener('click', function () { UO.copyText($('#outMsg').value); });
+  $('#btnSend').addEventListener('click', function () { if (lastCreated) send(lastCreated); });
+  $('#btnCopyLink').addEventListener('click', function () { if (lastCreated) UO.copyText(linkOf(lastCreated.token)); });
   $('#btnNew').addEventListener('click', resetNew);
   $('#btnRefresh').addEventListener('click', loadList);
+
+  var DROP_SUB = UO.canShare() || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+    ? '눌러서 PDF 파일을 고르세요' : '눌러서 파일을 고르거나 여기로 끌어다 놓으세요';
+  $('#dropSub').textContent = DROP_SUB;
 
   var saved = stored();
   if (saved) login(saved, true);

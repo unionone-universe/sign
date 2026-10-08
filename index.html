@@ -5,8 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#ffffff">
-<title>UNION ONE 전자계약</title>
-<link rel="icon" type="image/png" href="logo.png">
+<meta name="format-detection" content="telephone=no">
+<title>UNION ONE 전자서명</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="UNION ONE">
+<meta property="og:title" content="(주)유니온 원 전자서명 요청">
+<meta property="og:description" content="문서 내용을 확인하신 뒤 서명해 주세요.">
+<meta property="og:image" content="https://unionone-universe.github.io/sign/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -19,7 +28,7 @@
     <div class="brand">
       <img src="logo.png" alt="UNION ONE">
       <span class="brand-divider"></span>
-      <span class="brand-label">E-CONTRACT</span>
+      <span class="brand-label">E-SIGN</span>
     </div>
     <div class="topbar-right" id="topDocNo"></div>
   </div>
@@ -30,7 +39,7 @@
   <!-- 불러오는 중 -->
   <section class="card state" id="viewLoading">
     <div class="spinner"></div>
-    <strong>계약서를 불러오고 있습니다</strong>
+    <strong>문서를 불러오고 있습니다</strong>
     <p>잠시만 기다려 주세요.</p>
   </section>
 
@@ -49,10 +58,12 @@
       <h1 id="docTitle"></h1>
       <dl class="meta">
         <dt>문서번호</dt><dd id="docNo"></dd>
-        <dt>요청자</dt><dd>(주)유니온 원</dd>
-        <dt>서명자</dt><dd id="docSigner"></dd>
-        <dt>원본 확인</dt><dd id="docHash"></dd>
+        <dt>문서 종류</dt><dd id="docType"></dd>
+        <dt>보낸 곳</dt><dd>(주)유니온 원</dd>
+        <dt id="dueLabel">서명 기한</dt><dd id="docDue"></dd>
+        <dt id="hashLabel">원본 확인</dt><dd id="docHash"></dd>
       </dl>
+      <button class="btn primary block" id="btnGoSign" type="button" hidden style="margin-top:18px">내용 확인 후 서명하기</button>
     </section>
 
     <!-- 완료 -->
@@ -60,13 +71,12 @@
       <svg class="icon" viewBox="0 0 56 56" fill="none" stroke="#111" stroke-width="2.4"><circle cx="28" cy="28" r="25"/><path d="M17 29l7.5 7.5L40 21" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <strong style="font-size:19px">서명이 완료되었습니다</strong>
       <p id="doneWhen"></p>
-      <div style="max-width:360px;margin:22px auto 0">
-        <button class="btn primary block" id="btnDownload" type="button">서명 완료본 내려받기 (PDF)</button>
+      <p class="notice" style="text-align:left;max-width:520px;margin:18px auto 0" id="doneNotice"></p>
+      <div style="max-width:360px;margin:18px auto 0">
+        <button class="btn primary block" id="btnDownload" type="button">보관용 완료본 내려받기 (PDF)</button>
+        <button class="linkish" id="btnExternal" type="button" hidden style="margin-top:12px">내려받기가 되지 않으면 다른 브라우저로 열기</button>
       </div>
-      <p class="notice" style="text-align:left;max-width:520px;margin:18px auto 0">
-        서명 완료본 마지막 장에는 전자서명 인증 기록(문서번호·서명 일시·원본 확인값)이 첨부되어 있습니다.
-        완료본은 (주)유니온 원에도 자동으로 보관됩니다.
-      </p>
+      <p class="fine">완료본 마지막 장에는 전자서명 인증 기록(문서번호·서명 일시·원본 확인값)이 첨부되어 있습니다.</p>
     </section>
 
     <!-- 마무리 재시도 -->
@@ -79,7 +89,7 @@
     </section>
 
     <div class="viewer-head">
-      <strong>계약서 내용</strong>
+      <strong id="viewerTitle">문서 내용</strong>
       <span id="pageCount"></span>
     </div>
     <div class="pdf-viewer" id="viewer"></div>
@@ -87,17 +97,12 @@
     <!-- 서명 -->
     <section class="card" id="viewSign" hidden style="margin-top:22px">
       <h2>서명하기</h2>
-      <p class="sub">위 계약서 내용을 끝까지 확인하신 뒤, 아래 정보를 입력하고 서명해 주세요.</p>
+      <p class="sub" id="signSub"></p>
 
-      <div class="grid-2">
-        <div class="field">
-          <label for="inName">서명자 성명</label>
-          <input type="text" id="inName" autocomplete="name" placeholder="성명 입력">
-        </div>
-        <div class="field">
-          <label for="inPhone">휴대폰 번호</label>
-          <input type="tel" id="inPhone" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000">
-        </div>
+      <div class="field">
+        <label for="inName">성명</label>
+        <input type="text" id="inName" autocomplete="name" maxlength="30" placeholder="성명을 입력해 주세요">
+        <div class="hint" id="nameHint"></div>
       </div>
 
       <div class="field">
@@ -115,7 +120,7 @@
 
       <label class="check">
         <input type="checkbox" id="inAgree">
-        <span>위 계약서의 내용을 모두 확인하였으며, 전자서명으로 계약을 체결하는 것에 동의합니다. 전자서명된 계약서는 서면 계약서와 동일한 효력을 가집니다.</span>
+        <span id="agreeText"></span>
       </label>
 
       <button class="btn primary block" id="btnSubmit" type="button">서명 완료</button>
@@ -124,6 +129,19 @@
 
   </div>
 </main>
+
+<!-- 서명 확인 -->
+<div class="modal-back" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle">서명 확인</h2>
+    <p class="sub" id="modalSub"></p>
+    <div class="preview-box"><canvas id="previewCanvas"></canvas></div>
+    <div class="btn-row modal-actions">
+      <button class="btn ghost" id="btnRedo" type="button">다시 쓰기</button>
+      <button class="btn primary" id="btnConfirm" type="button">이대로 제출</button>
+    </div>
+  </div>
+</div>
 
 <footer class="site-footer">
   (주)유니온 원 · UNION ONE Co., Ltd.<br>
@@ -139,9 +157,12 @@
   var $ = UO.$;
   var token = new URLSearchParams(location.search).get('t') || '';
   var doc = null;          // 서버 응답
+  var info = UO.docInfo('문서');
+  var render = null;       // 화면에 그린 PDF
   var origBytes = null;    // 원본 PDF
   var finalBytes = null;   // 완료본 PDF
   var pending = null;      // 마무리 재시도용 데이터
+  var draft = null;        // 제출 전 확인용 { name, sigBytes }
   var pad = null;
 
   /* ---------------- 화면 전환 ---------------- */
@@ -171,7 +192,7 @@
       ctx.lineJoin = 'round';
       ctx.strokeStyle = '#111111';
       ctx.fillStyle = '#111111';
-      ctx.lineWidth = 2.6 * dpr;
+      ctx.lineWidth = 3.2 * dpr;
       strokes = 0;
       placeholder.hidden = false;
     }
@@ -181,7 +202,7 @@
     }
     function down(e) {
       e.preventDefault();
-      canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+      if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (x) {} }
       drawing = true;
       last = pt(e); lastMid = last;
       ctx.beginPath(); ctx.arc(last.x, last.y, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill();
@@ -231,42 +252,18 @@
           }
         }
         if (x2 < 0) return Promise.resolve(null);
-        var pad = Math.round(8 * dpr);
+        var pad = Math.round(4 * dpr);
         x1 = Math.max(0, x1 - pad); y1 = Math.max(0, y1 - pad);
         x2 = Math.min(w - 1, x2 + pad); y2 = Math.min(h - 1, y2 + pad);
         var out = document.createElement('canvas');
         out.width = x2 - x1 + 1; out.height = y2 - y1 + 1;
         out.getContext('2d').drawImage(canvas, x1, y1, out.width, out.height, 0, 0, out.width, out.height);
-        return canvasToBytes(out);
+        return UO.canvasToBytes(out);
       },
     };
   }
 
-  function canvasToBytes(canvas) {
-    return new Promise(function (resolve, reject) {
-      canvas.toBlob(function (blob) {
-        if (!blob) return reject(new Error('이미지 생성에 실패했습니다.'));
-        blob.arrayBuffer().then(function (buf) { resolve(new Uint8Array(buf)); }, reject);
-      }, 'image/png');
-    });
-  }
-
-  function loadImage(src) {
-    return new Promise(function (resolve, reject) {
-      var img = new Image();
-      img.onload = function () { resolve(img); };
-      img.onerror = function () { reject(new Error('이미지를 불러오지 못했습니다.')); };
-      img.src = src;
-    });
-  }
-
   /* ---------------- 인증 기록 페이지 ---------------- */
-  function maskPhone(p) {
-    var d = String(p || '').replace(/[^0-9]/g, '');
-    if (d.length < 10) return p || '';
-    return d.slice(0, 3) + '-****-' + d.slice(-4);
-  }
-
   function wrapLines(ctx, text, maxW) {
     var lines = [], line = '';
     String(text).split('').forEach(function (ch) {
@@ -278,16 +275,34 @@
     return lines;
   }
 
-  function buildAuditPage(info) {
+  function buildAuditPage(p) {
     var W = 1240, H = 1754, M = 110;
-    var FONT = '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    var FONT = UO.FONT;
     var MONO = 'Menlo, Consolas, "Courier New", monospace';
-    var fontsReady = (document.fonts && document.fonts.load)
-      ? Promise.all([document.fonts.load('400 24px "Noto Sans KR"'), document.fonts.load('700 24px "Noto Sans KR"')]).catch(function () {})
-      : Promise.resolve();
+    var notes = [
+      '· 원본 확인값(SHA-256)은 서명 요청 시 보관된 원본 파일의 고유값으로, 원본의 위·변조 여부를 확인하는 데 사용됩니다.',
+      '· 서명 일시는 (주)유니온 원 서버에 기록된 시각이며, 서명 이미지와 완료본은 (주)유니온 원 문서 보관함에 함께 보관됩니다.',
+      '· 본 기록은 위 ' + info.label + '에 대한 서명자의 전자서명 사실을 확인하기 위한 증빙으로 첨부됩니다.',
+    ];
+    var rows = [
+      ['문서번호', doc.docNo],
+      ['문서명', doc.title],
+      ['문서 종류', info.label],
+      ['요청자', '(주)유니온 원  (사업자등록번호 210-88-03747)'],
+      ['서명자', p.name],
+      ['서명 일시', p.signedAt + '  (한국 표준시, 서버 기준)'],
+      ['요청 일시', doc.createdAt + '  (한국 표준시)'],
+      ['인증 방식', '개별 서명 링크 인증 · 서명자 성명 입력 · 자필 전자서명'],
+      ['서명 동의', info.agreeShort],
+      ['원본 확인값', { mono: doc.sha256 }],
+      ['접속 기기', { small: p.ua }],
+    ];
+    var allText = '전자서명 인증 기록 본 기록은 아래 문서에 전자서명이 이루어졌음을 확인하는 기록입니다. 서명자 서명 일시 ' +
+      notes.join(' ') + rows.map(function (r) { return r[0] + ' ' + (typeof r[1] === 'string' ? r[1] : ''); }).join(' ') +
+      ' (주)유니온 원 · UNION ONE Co., Ltd. · 대구광역시 동구 동화천로77길 46, 3층';
 
-    return fontsReady.then(function () {
-      return Promise.all([loadImage('logo.png'), loadImage(info.sigUrl)]);
+    return UO.loadFonts(allText, [400, 500, 700]).then(function () {
+      return Promise.all([UO.loadImage('logo.png'), UO.loadImage(p.sigUrl)]);
     }).then(function (imgs) {
       var logo = imgs[0], sig = imgs[1];
       var c = document.createElement('canvas');
@@ -313,22 +328,9 @@
 
       g.fillStyle = '#444';
       g.font = '400 21px ' + FONT;
-      g.fillText('본 문서는 아래 계약서가 전자서명으로 체결되었음을 증명하는 기록입니다.', M, 350);
+      g.fillText('본 기록은 아래 문서에 전자서명이 이루어졌음을 확인하는 기록입니다.', M, 350);
 
       // 표
-      var rows = [
-        ['문서번호', info.docNo],
-        ['문서명', info.title],
-        ['요청자', '(주)유니온 원  (사업자등록번호 210-88-03747)'],
-        ['서명자', info.name],
-        ['휴대폰 번호', maskPhone(info.phone)],
-        ['서명 일시', info.signedAt + '  (한국 표준시, 서버 기준)'],
-        ['요청 일시', info.createdAt + '  (한국 표준시)'],
-        ['인증 방식', '개별 서명 링크 인증 · 서명자 성명 확인 · 휴대폰 번호 기록 · 자필 전자서명'],
-        ['서명 동의', '계약서 내용을 모두 확인하였으며 전자서명으로 계약을 체결하는 것에 동의함'],
-        ['원본 확인값', { mono: info.sha256 }],
-        ['접속 기기', { small: info.ua }],
-      ];
       var tx = M, tw = W - M * 2, lw2 = 230, vx = tx + lw2 + 26, vw = tw - lw2 - 44;
       var y = 392;
       g.fillStyle = '#111'; g.fillRect(tx, y, tw, 2);
@@ -338,7 +340,7 @@
         if (isObj && v.mono) {
           font = '500 20px ' + MONO; lineH = 30;
           g.font = font;
-          lines = ['SHA-256', v.mono.slice(0, 32), v.mono.slice(32)];
+          lines = ['SHA-256', String(v.mono).slice(0, 32), String(v.mono).slice(32)];
         } else if (isObj && v.small) {
           font = '400 17px ' + FONT; lineH = 26;
           g.font = font;
@@ -355,8 +357,9 @@
         g.font = font;
         var startY = y + 2 + (h - 2 - lines.length * lineH) / 2 + lineH * 0.72;
         lines.forEach(function (ln, i) {
-          g.fillStyle = (isObj && v.mono && i === 0) ? '#8a8a8a' : '#111';
-          if (isObj && v.mono && i === 0) g.font = '700 15px ' + FONT; else g.font = font;
+          var head = isObj && v.mono && i === 0;
+          g.fillStyle = head ? '#8a8a8a' : '#111';
+          g.font = head ? '700 15px ' + FONT : font;
           g.fillText(ln, vx, startY + i * lineH);
         });
         y += h;
@@ -379,20 +382,16 @@
       var nx = M + bw + 40;
       g.fillText('서명자', nx, y + 60);
       g.fillStyle = '#111'; g.font = '700 26px ' + FONT;
-      g.fillText(info.name, nx, y + 100);
+      g.fillText(p.name, nx, y + 100);
       g.fillStyle = '#444'; g.font = '400 19px ' + FONT;
       g.fillText('서명 일시', nx, y + 150);
       g.fillStyle = '#111'; g.font = '500 21px ' + FONT;
-      g.fillText(info.signedAt, nx, y + 172);
+      g.fillText(p.signedAt, nx, y + 172);
 
       // 안내
       y += bh + 56;
       g.fillStyle = '#444'; g.font = '400 18px ' + FONT;
-      [
-        '· 원본 확인값(SHA-256)은 서명 요청 시 보관된 원본 계약서 파일의 고유값으로, 원본의 위·변조 여부를 확인하는 데 사용됩니다.',
-        '· 서명 일시는 (주)유니온 원 서버에 기록된 시각이며, 서명 이미지와 완료본은 (주)유니온 원 문서 보관함에 함께 보관됩니다.',
-        '· 본 기록은 계약서 제7조(전자서명)에 따라 서면 계약서와 동일한 효력을 가지는 전자서명 계약의 증빙으로 첨부됩니다.',
-      ].forEach(function (t) {
+      notes.forEach(function (t) {
         wrapLines(g, t, W - M * 2).forEach(function (ln) { g.fillText(ln, M, y); y += 28; });
         y += 4;
       });
@@ -402,70 +401,74 @@
       g.fillStyle = '#8a8a8a'; g.font = '400 16px ' + FONT;
       g.fillText('(주)유니온 원 · UNION ONE Co., Ltd. · 대구광역시 동구 동화천로77길 46, 3층', M, H - 112);
       g.textAlign = 'right';
-      g.fillText('UNION ONE e-Sign · ' + info.docNo, W - M, H - 112);
+      g.fillText('UNION ONE e-Sign · ' + doc.docNo, W - M, H - 112);
       g.textAlign = 'left';
 
-      return canvasToBytes(c);
+      return UO.canvasToBytes(c);
     });
   }
 
   /* ---------------- 완료본 만들기 ---------------- */
-  function buildSignedPdf(info) {
+  function buildSignedPdf(p) {
     var L = PDFLib;
-    return L.PDFDocument.load(origBytes).then(function (pdf) {
-      return Promise.all([pdf.embedPng(info.sigBytes), buildAuditPage(info), pdf.embedFont(L.StandardFonts.Helvetica)])
-        .then(function (res) {
-          var sigImg = res[0], auditBytes = res[1], font = res[2];
-          var box = doc.sigBox;
-          var page = pdf.getPage(Math.min(box.page, pdf.getPageCount() - 1));
+    var spot = doc.sigBox;
+    var nameImg = null;
+    return UO.loadFonts(p.name, [400]).then(function () {
+      nameImg = spot.name ? UO.textImage(p.name, spot.name.size) : null;
+      return Promise.all([
+        L.PDFDocument.load(origBytes),
+        nameImg ? UO.canvasToBytes(nameImg.canvas) : Promise.resolve(null),
+        buildAuditPage(p),
+      ]);
+    }).then(function (res) {
+      var pdf = res[0], nameBytes = res[1], auditBytes = res[2];
+      return Promise.all([
+        pdf.embedPng(p.sigBytes),
+        nameBytes ? pdf.embedPng(nameBytes) : Promise.resolve(null),
+        pdf.embedPng(auditBytes),
+        pdf.embedFont(L.StandardFonts.Helvetica),
+      ]).then(function (emb) {
+        var sigImg = emb[0], namePng = emb[1], auditImg = emb[2], font = emb[3];
+        var page = pdf.getPage(Math.min(spot.page, pdf.getPageCount() - 1));
+        var lay = UO.layout(spot, sigImg.width, sigImg.height, nameImg);
 
-          // 서명 이미지: 표시 문구 가운데에 올림
-          var maxH = 44, maxW = Math.max(130, box.w * 2.2);
-          var ratio = sigImg.width / sigImg.height;
-          var h = maxH, w = h * ratio;
-          if (w > maxW) { w = maxW; h = w / ratio; }
-          var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-          page.drawImage(sigImg, { x: cx - w / 2, y: cy - h / 2, width: w, height: h });
+        if (lay.name && namePng) {
+          page.drawImage(namePng, { x: lay.name.x, y: lay.name.y, width: lay.name.w, height: lay.name.h });
+        }
+        page.drawImage(sigImg, { x: lay.sig.x, y: lay.sig.y, width: lay.sig.w, height: lay.sig.h });
 
-          // 각 쪽 하단 서명 표시
-          var stamp = 'UNION ONE e-Sign  |  ' + info.docNo + '  |  Signed ' + info.signedAt + ' KST';
-          pdf.getPages().forEach(function (p) {
-            var size = 6.5;
-            var tw = font.widthOfTextAtSize(stamp, size);
-            p.drawText(stamp, { x: p.getWidth() - 34 - tw, y: 14, size: size, font: font, color: L.rgb(0.5, 0.5, 0.5) });
-          });
-
-          return pdf.embedPng(auditBytes).then(function (auditImg) {
-            var ap = pdf.addPage([595.28, 841.89]);
-            ap.drawImage(auditImg, { x: 0, y: 0, width: 595.28, height: 841.89 });
-            pdf.setTitle(info.title + ' (서명 완료)');
-            pdf.setAuthor('(주)유니온 원');
-            pdf.setSubject(info.docNo);
-            pdf.setCreator('UNION ONE e-Sign');
-            pdf.setProducer('UNION ONE e-Sign');
-            return pdf.save();
-          });
+        // 각 쪽 하단 전자서명 표시
+        var stamp = 'UNION ONE e-Sign  |  ' + doc.docNo + '  |  Signed ' + p.signedAt + ' KST';
+        pdf.getPages().forEach(function (pg) {
+          var size = 6;
+          var tw = font.widthOfTextAtSize(stamp, size);
+          pg.drawText(stamp, { x: pg.getWidth() - 30 - tw, y: 10, size: size, font: font, color: L.rgb(0.55, 0.55, 0.55) });
         });
+
+        var ap = pdf.addPage([595.28, 841.89]);
+        ap.drawImage(auditImg, { x: 0, y: 0, width: 595.28, height: 841.89 });
+        pdf.setTitle(doc.title + ' (서명 완료)');
+        pdf.setAuthor('(주)유니온 원');
+        pdf.setSubject(doc.docNo);
+        pdf.setCreator('UNION ONE e-Sign');
+        pdf.setProducer('UNION ONE e-Sign');
+        return pdf.save();
+      });
     });
   }
 
   function finalize(p) {
     pending = p;
     UO.busy('서명 완료본을 만들고 있습니다', '창을 닫지 말고 잠시만 기다려 주세요.');
-    var blobUrl = URL.createObjectURL(new Blob([p.sigBytes], { type: 'image/png' }));
-    var info = {
-      docNo: doc.docNo, title: doc.title, createdAt: doc.createdAt, sha256: doc.sha256,
-      name: p.name, phone: p.phone, signedAt: p.signedAt, ua: p.ua,
-      sigBytes: p.sigBytes, sigUrl: blobUrl,
-    };
-    return buildSignedPdf(info)
+    p.sigUrl = URL.createObjectURL(new Blob([p.sigBytes], { type: 'image/png' }));
+    return buildSignedPdf(p)
       .then(function (bytes) {
         finalBytes = bytes;
         return UO.bytesToB64(bytes);
       })
       .then(function (b64) { return UO.api('sign.finalize', { token: token, pdf: b64 }); })
       .then(function () {
-        URL.revokeObjectURL(blobUrl);
+        URL.revokeObjectURL(p.sigUrl);
         pending = null;
         UO.busy(null);
         showDone(p.signedAt);
@@ -475,7 +478,7 @@
         UO.busy(null);
         $('#viewSign').hidden = true;
         $('#viewRetry').hidden = false;
-        $('#retryMsg').textContent = err.message + ' — 아래 버튼을 눌러 다시 시도해 주세요.';
+        $('#retryMsg').textContent = err.message + ' 아래 버튼을 눌러 다시 시도해 주세요.';
         $('#viewRetry').scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
   }
@@ -483,50 +486,89 @@
   function showDone(signedAt) {
     $('#viewSign').hidden = true;
     $('#viewRetry').hidden = true;
+    $('#btnGoSign').hidden = true;
     $('#viewDone').hidden = false;
-    $('#doneWhen').textContent = '서명 일시 ' + signedAt + ' (한국 표준시)';
+    $('#hashLabel').textContent = '상태';
+    $('#docHash').innerHTML = '<span class="badge solid">서명 완료</span>';
+    $('#dueLabel').textContent = '서명 일시';
+    $('#docDue').textContent = signedAt;
+    $('#doneWhen').textContent = UO.koDate(signedAt) + ' ' + String(signedAt).slice(11, 16) + ' 서명';
+    $('#doneNotice').textContent = '서명하신 ' + info.label + '는 (주)유니온 원에 자동으로 전달되었습니다. 따로 보내주실 필요는 없습니다. 보관용 완료본이 필요하시면 아래 버튼으로 내려받으세요.';
+    $('#viewerTitle').textContent = '서명 완료본';
+    if (/KAKAOTALK/i.test(navigator.userAgent)) $('#btnExternal').hidden = false;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function updatePageCount(r) {
+    render = r;
     $('#pageCount').textContent = '총 ' + r.pages.length + '쪽';
   }
 
   /* ---------------- 제출 ---------------- */
   function norm(s) { return String(s || '').replace(/\s+/g, ''); }
 
-  function submit() {
+  function openPreview() {
     var err = $('#formError');
     err.textContent = '';
-    var name = $('#inName').value.trim();
-    var phone = $('#inPhone').value.replace(/[^0-9]/g, '');
-    if (!name) { err.textContent = '서명자 성명을 입력해 주세요.'; return; }
-    if (norm(name) !== norm(doc.signerName)) { err.textContent = '계약서에 기재된 서명자(' + doc.signerName + ') 본인의 성명을 입력해 주세요.'; return; }
-    if (!/^01[0-9]{8,9}$/.test(phone)) { err.textContent = '휴대폰 번호를 정확히 입력해 주세요.'; return; }
+    var name = $('#inName').value.replace(/\s+/g, ' ').trim();
+    if (norm(name).length < 2) { err.textContent = '성명을 입력해 주세요.'; $('#inName').focus(); return; }
+    if (doc.signerName && norm(name) !== norm(doc.signerName)) { err.textContent = '문서에 기재된 서명자(' + doc.signerName + ') 본인의 성명을 입력해 주세요.'; return; }
     if (pad.isEmpty()) { err.textContent = '서명 영역에 서명해 주세요.'; return; }
-    if (!$('#inAgree').checked) { err.textContent = '전자서명 동의에 체크해 주세요.'; return; }
+    if (!$('#inAgree').checked) { err.textContent = '내용 확인 및 동의에 체크해 주세요.'; return; }
 
-    var ua = navigator.userAgent;
-    var sigBytes = null;
-    $('#btnSubmit').disabled = true;
-    UO.busy('서명을 제출하고 있습니다');
+    var spot = doc.sigBox;
+    var sigBytes = null, sigUrl = null, nameImg = null;
+    UO.busy('확인 화면을 준비하고 있습니다');
     pad.toPngBytes()
       .then(function (bytes) {
         if (!bytes) throw new Error('서명 영역에 서명해 주세요.');
         sigBytes = bytes;
-        return UO.bytesToB64(bytes);
+        sigUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+        return Promise.all([UO.loadImage(sigUrl), UO.loadFonts(name, [400])]);
       })
+      .then(function (res) {
+        var img = res[0];
+        nameImg = spot.name ? UO.textImage(name, spot.name.size) : null;
+        var lay = UO.layout(spot, img.naturalWidth, img.naturalHeight, nameImg);
+        draft = { name: name, sigBytes: sigBytes };
+        $('#modalSub').textContent = spot.name
+          ? '입력하신 성명과 서명이 아래와 같이 ' + info.label + '에 들어갑니다.'
+          : '서명이 아래와 같이 ' + info.label + '에 들어갑니다.';
+        $('#modal').hidden = false;
+        document.body.classList.add('no-scroll');
+        var pageObj = render.pages[Math.min(spot.page, render.pages.length - 1)].page;
+        return UO.renderSignPreview($('#previewCanvas'), pageObj, spot, lay, img, nameImg);
+      })
+      .then(function () { UO.busy(null); if (sigUrl) URL.revokeObjectURL(sigUrl); })
+      .catch(function (e) { UO.busy(null); closeModal(); err.textContent = e.message; });
+  }
+
+  function closeModal() {
+    $('#modal').hidden = true;
+    document.body.classList.remove('no-scroll');
+  }
+
+  function submit() {
+    if (!draft) return;
+    var d = draft;
+    var err = $('#formError');
+    var ua = navigator.userAgent;
+    $('#btnConfirm').disabled = true;
+    closeModal();
+    UO.busy('서명을 제출하고 있습니다');
+    UO.bytesToB64(d.sigBytes)
       .then(function (b64) {
-        return UO.api('sign.submit', { token: token, name: name, phone: phone, agree: true, signature: b64, ua: ua });
+        return UO.api('sign.submit', { token: token, name: d.name, agree: true, signature: b64, ua: ua });
       })
       .then(function (r) {
-        return finalize({ name: name, phone: r.phone, signedAt: r.signedAt, ua: ua, sigBytes: sigBytes });
+        return finalize({ name: r.name || d.name, signedAt: r.signedAt, ua: ua, sigBytes: d.sigBytes });
       })
       .catch(function (e) {
         UO.busy(null);
-        $('#btnSubmit').disabled = false;
         err.textContent = e.message;
-      });
+        $('#viewSign').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      })
+      .then(function () { $('#btnConfirm').disabled = false; });
   }
 
   /* ---------------- 시작 ---------------- */
@@ -538,18 +580,22 @@
     UO.api('sign.get', { token: token })
       .then(function (r) {
         doc = r;
-        document.title = r.title + ' · UNION ONE 전자계약';
+        info = UO.docInfo(r.docType);
+        document.title = r.title + ' · UNION ONE';
         $('#docTitle').textContent = r.title;
         $('#docNo').textContent = r.docNo;
         $('#topDocNo').textContent = r.docNo;
-        $('#docSigner').textContent = r.signerName + ' 님';
+        $('#docType').textContent = info.label;
+        $('#docDue').textContent = UO.koDate(r.expiresAt) + '까지';
+        $('#viewerTitle').textContent = info.label + ' 내용';
+        $('#signSub').textContent = '위 ' + info.label + ' 내용을 확인하신 뒤 성명을 입력하고 서명해 주세요.';
+        $('#agreeText').textContent = info.agree;
         show('viewDoc');
 
         var bytes = UO.b64ToBytes(r.pdf);
 
         if (r.status === '완료') {
           finalBytes = bytes;
-          $('#docHash').innerHTML = '<span class="badge solid">서명 완료</span>';
           showDone(r.signedAt);
           return UO.renderPdf($('#viewer'), bytes).then(updatePageCount);
         }
@@ -558,38 +604,65 @@
         return UO.sha256Hex(bytes).then(function (h) {
           var okHash = !h || h === r.sha256;
           $('#docHash').innerHTML = okHash
-            ? '<span class="badge">✓ 원본과 일치</span>'
+            ? '<span class="badge">원본과 일치</span>'
             : '<span class="badge warn">원본 불일치</span>';
           return UO.renderPdf($('#viewer'), bytes).then(function (res) {
             updatePageCount(res);
             if (!okHash) {
-              fail('문서 확인에 실패했습니다', '원본 확인값이 일치하지 않아 서명을 진행할 수 없습니다. 발신처에 문의해 주세요.');
+              fail('문서 확인에 실패했습니다', '원본 확인값이 일치하지 않아 서명을 진행할 수 없습니다. (주)유니온 원 담당자에게 문의해 주세요.');
               return;
             }
             if (r.status === '처리중' && r.signature) {
               return finalize({
-                name: r.inputName, phone: r.phone, signedAt: r.signedAt, ua: r.userAgent,
+                name: r.inputName, signedAt: r.signedAt, ua: r.userAgent,
                 sigBytes: UO.b64ToBytes(r.signature),
               });
             }
+            if (r.signerName) {
+              $('#inName').value = '';
+              $('#nameHint').textContent = '문서에 기재된 서명자(' + r.signerName + ') 본인의 성명을 입력해 주세요.';
+            } else if (r.sigBox && r.sigBox.name) {
+              $('#nameHint').textContent = '입력하신 성명은 ' + info.label + '의 성명란에 그대로 기재됩니다.';
+            } else {
+              $('#nameHint').textContent = '서명자 확인을 위해 성명을 입력해 주세요.';
+            }
             $('#viewSign').hidden = false;
+            $('#btnGoSign').hidden = false;
             pad = SignaturePad($('#pad'), $('#padPh'));
           });
         });
       })
-      .catch(function (e) { fail('문서를 열 수 없습니다', e.message); });
+      .catch(function (e) {
+        if (e.code === 'EXPIRED') fail('서명 기한이 지났습니다', e.message);
+        else if (e.code === 'CANCELED') fail('취소된 요청입니다', e.message);
+        else fail('문서를 열 수 없습니다', e.message);
+      });
   }
 
+  $('#btnGoSign').addEventListener('click', function () {
+    $('#viewSign').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   $('#btnClear').addEventListener('click', function () { if (pad) pad.clear(); });
-  $('#btnSubmit').addEventListener('click', submit);
+  ['input', 'change'].forEach(function (ev) {
+    $('#inName').addEventListener(ev, function () { $('#formError').textContent = ''; });
+    $('#inAgree').addEventListener(ev, function () { $('#formError').textContent = ''; });
+  });
+  $('#pad').addEventListener('pointerdown', function () { $('#formError').textContent = ''; });
+  $('#btnSubmit').addEventListener('click', openPreview);
+  $('#btnRedo').addEventListener('click', function () {
+    closeModal();
+    draft = null;
+    if (pad) pad.clear();
+    $('#pad').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  $('#btnConfirm').addEventListener('click', submit);
+  $('#modal').addEventListener('click', function (e) { if (e.target === $('#modal')) closeModal(); });
   $('#btnRetry').addEventListener('click', function () { if (pending) finalize(pending); });
   $('#btnDownload').addEventListener('click', function () {
     if (finalBytes) UO.downloadBytes(finalBytes, UO.safeFile(doc.docNo + '_' + doc.title + '_서명완료.pdf'));
   });
-  $('#inPhone').addEventListener('input', function (e) {
-    var d = e.target.value.replace(/[^0-9]/g, '').slice(0, 11);
-    e.target.value = d.length > 7 ? d.slice(0, 3) + '-' + d.slice(3, d.length - 4) + '-' + d.slice(-4)
-      : d.length > 3 ? d.slice(0, 3) + '-' + d.slice(3) : d;
+  $('#btnExternal').addEventListener('click', function () {
+    location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href);
   });
 
   start();
